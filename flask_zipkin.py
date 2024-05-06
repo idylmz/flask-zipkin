@@ -9,7 +9,7 @@ from flask import current_app
 from flask import g
 from flask import request
 from py_zipkin import zipkin
-
+import threading
 
 __version_info__ = ('0', '0', '5')
 __version__ = '.'.join(__version_info__)
@@ -38,15 +38,18 @@ class Zipkin(object):
     def default_exception_handler(self, ex):
         pass
 
+    def send_request(self, url, data, headers, timeout):
+        requests.post(url, data=data, headers=headers, timeout=timeout)
+
     def default_handler(self, encoded_span):
         try:
             #body = str.encode('\x0c\x00\x00\x00\x01') + encoded_span
-            return requests.post(
-                self.app.config.get('ZIPKIN_DSN'),
-                data=encoded_span,
-                headers={'Content-Type': 'application/x-thrift'},
-                timeout=self._timeout,
-            )
+            headers = {'Content-Type': 'application/x-thrift'}
+            thread = threading.Thread(target=self.send_request, args=(self.app.config.get('ZIPKIN_DSN')
+                                                                 , encoded_span
+                                                                 , headers
+                                                                 , self._timeout))
+            thread.start()
         except Exception as e:
             if self._transport_exception_handler:
                 self._transport_exception_handler(e)
